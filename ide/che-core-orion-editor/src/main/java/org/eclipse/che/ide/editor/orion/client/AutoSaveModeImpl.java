@@ -47,7 +47,6 @@ import static org.eclipse.che.api.project.shared.dto.EditorChangesDto.Type.REPLA
 import static org.eclipse.che.ide.editor.orion.client.AutoSaveMode.Mode.ACTIVATED;
 import static org.eclipse.che.ide.editor.orion.client.AutoSaveMode.Mode.DEACTIVATED;
 import static org.eclipse.che.ide.editor.orion.client.AutoSaveMode.Mode.RESUMING;
-import static org.eclipse.che.ide.editor.orion.client.AutoSaveMode.Mode.SUSPENDED;
 import static org.eclipse.che.ide.editor.preferences.editorproperties.EditorProperties.ENABLE_AUTO_SAVE;
 
 /**
@@ -185,14 +184,14 @@ public class AutoSaveModeImpl implements AutoSaveMode, EditorSettingsChangedHand
 
     private void onFileTrackingEvent(FileTrackingEvent event) {
         switch (event.getType()) {
-            case SUSPEND: {
+            case SUSPENDED: {
 //                Log.error(getClass(), "--- onFileTrackingEvent  SUSPENDED " + this.hashCode());
-                mode = SUSPENDED;
+                mode = Mode.SUSPENDED;
                 saveTimer.cancel();
                 break;
             }
 
-            case RESUME: {
+            case RESUMED: {
 //                Log.error(getClass(), "--- onFileTrackingEvent  RESUME " + this.hashCode());
                 mode = RESUMING;
                 break;
@@ -258,7 +257,7 @@ public class AutoSaveModeImpl implements AutoSaveMode, EditorSettingsChangedHand
     }
 
     private void save() {
-        if (SUSPENDED == mode) {
+        if (Mode.SUSPENDED == mode) {
             return;
         }
 

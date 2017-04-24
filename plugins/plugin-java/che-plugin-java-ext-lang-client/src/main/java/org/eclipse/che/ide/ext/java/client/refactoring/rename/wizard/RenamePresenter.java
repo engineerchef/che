@@ -11,7 +11,6 @@
 package org.eclipse.che.ide.ext.java.client.refactoring.rename.wizard;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Strings;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.google.web.bindery.event.shared.EventBus;
@@ -23,12 +22,12 @@ import org.eclipse.che.api.promises.client.OperationException;
 import org.eclipse.che.api.promises.client.Promise;
 import org.eclipse.che.api.promises.client.PromiseError;
 import org.eclipse.che.ide.api.app.AppContext;
-import org.eclipse.che.ide.api.dialogs.CancelCallback;
 import org.eclipse.che.ide.api.dialogs.ConfirmCallback;
 import org.eclipse.che.ide.api.dialogs.DialogFactory;
 import org.eclipse.che.ide.api.editor.EditorAgent;
 import org.eclipse.che.ide.api.editor.EditorPartPresenter;
 import org.eclipse.che.ide.api.editor.texteditor.TextEditor;
+import org.eclipse.che.ide.api.event.ng.ClientServerEventService;
 import org.eclipse.che.ide.api.notification.NotificationManager;
 import org.eclipse.che.ide.api.resources.Container;
 import org.eclipse.che.ide.api.resources.Project;
@@ -59,9 +58,9 @@ import java.util.List;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingMoveEvent;
-import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingResumeEvent;
-import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingSuspendEvent;
+import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingMovedEvent;
+import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingResumedEvent;
+import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingSuspendedEvent;
 import static org.eclipse.che.ide.api.notification.StatusNotification.DisplayMode.FLOAT_MODE;
 import static org.eclipse.che.ide.api.notification.StatusNotification.Status.FAIL;
 import static org.eclipse.che.ide.api.resources.Resource.FILE;
@@ -92,7 +91,8 @@ public class RenamePresenter implements ActionDelegate {
     private final DtoFactory                         dtoFactory;
     private final RefactoringServiceClient           refactorService;
     private final DialogFactory                      dialogFactory;
-    private final EventBus                           eventBus;
+    private final ClientServerEventService           clientServerEventService;
+    private final EventBus eventBus;
 
     private RenameRefactoringSession renameRefactoringSession;
     private RefactorInfo             refactorInfo;
@@ -107,6 +107,7 @@ public class RenamePresenter implements ActionDelegate {
                            NotificationManager notificationManager,
                            PreviewPresenter previewPresenter,
                            RefactoringServiceClient refactorService,
+                           ClientServerEventService clientServerEventService,
                            DtoFactory dtoFactory,
                            DialogFactory dialogFactory,
                            EventBus eventBus) {
@@ -116,6 +117,7 @@ public class RenamePresenter implements ActionDelegate {
         this.refactoringUpdater = refactoringUpdater;
         this.editorAgent = editorAgent;
         this.notificationManager = notificationManager;
+        this.clientServerEventService = clientServerEventService;
         this.eventBus = eventBus;
         this.view.setDelegate(this);
         this.appContext = appContext;
@@ -318,7 +320,11 @@ public class RenamePresenter implements ActionDelegate {
                         }
                         break;
                     default:
-                        applyRefactoring(session);
+                        clientServerEventService.sendFileTrackingSuspendEvent().then(success -> {
+                            eventBus.fireEvent(newFileTrackingSuspendedEvent());
+                            applyRefactoring(session);
+                        });
+
                 }
             }
         }).catchError(new Operation<PromiseError>() {
@@ -332,25 +338,21 @@ public class RenamePresenter implements ActionDelegate {
     private void showWarningDialog(final RefactoringSession session, ChangeCreationResult changeCreationResult) {
         List<RefactoringStatusEntry> entries = changeCreationResult.getStatus().getEntries();
 
+        ConfirmCallback confirmCallback = () -> clientServerEventService.sendFileTrackingSuspendEvent().then(success -> {
+            eventBus.fireEvent(newFileTrackingSuspendedEvent());
+            applyRefactoring(session);
+        });
+
         dialogFactory.createConfirmDialog(locale.warningOperationTitle(),
                                           entries.isEmpty() ? locale.warningOperationContent() : entries.get(0).getMessage(),
                                           locale.renameRename(),
                                           locale.buttonCancel(),
-                                          new ConfirmCallback() {
-                                              @Override
-                                              public void accepted() {
-                                                  applyRefactoring(session);
-                                              }
-                                          },
-                                          new CancelCallback() {
-                                              @Override
-                                              public void cancelled() {
-                                              }
+                                          confirmCallback,
+                                          () -> {
                                           }).show();
     }
 
     private void applyRefactoring(RefactoringSession session) {
-        eventBus.fireEvent(newFileTrackingSuspendEvent());
         refactorService.applyRefactoring(session).then(new Operation<RefactoringResult>() {
             @Override
             public void apply(RefactoringResult arg) throws OperationException {
@@ -392,11 +394,14 @@ public class RenamePresenter implements ActionDelegate {
 
                     if (!isNullOrEmpty(oldPath)) {
                         Log.error(getClass(), "************************* fire Move event ");
-                        eventBus.fireEvent(newFileTrackingMoveEvent(path, oldPath));
+                        clientServerEventService.sendFileTrackingMoveEvent(path, oldPath).then(success -> {
+                            eventBus.fireEvent(newFileTrackingMovedEvent(path, oldPath));
+                        });
                     }
                 }
-                eventBus.fireEvent(newFileTrackingResumeEvent());
-
+                clientServerEventService.sendFileTrackingResumeEvent().then(success -> {
+                    eventBus.fireEvent(newFileTrackingResumedEvent());
+                });
             }
         });
     }

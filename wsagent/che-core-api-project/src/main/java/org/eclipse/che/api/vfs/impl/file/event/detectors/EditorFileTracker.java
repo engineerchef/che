@@ -15,8 +15,6 @@ import com.google.common.hash.Hashing;
 import org.eclipse.che.api.core.ForbiddenException;
 import org.eclipse.che.api.core.ServerException;
 import org.eclipse.che.api.core.jsonrpc.RequestTransmitter;
-import org.eclipse.che.api.core.notification.EventService;
-import org.eclipse.che.api.core.notification.EventSubscriber;
 import org.eclipse.che.api.project.shared.dto.event.FileStateUpdateDto;
 import org.eclipse.che.api.project.shared.dto.event.FileTrackingOperationDto;
 import org.eclipse.che.api.project.shared.dto.event.FileTrackingOperationDto.Type;
@@ -81,22 +79,14 @@ public class EditorFileTracker {
     public EditorFileTracker(@Named("che.user.workspaces.storage") File root,
                              FileWatcherManager fileWatcherManager,
                              RequestTransmitter transmitter,
-                             VirtualFileSystemProvider vfsProvider,
-                             EventService eventService) {
+                             VirtualFileSystemProvider vfsProvider) {
         this.root = root;
         this.fileWatcherManager = fileWatcherManager;
         this.transmitter = transmitter;
         this.vfsProvider = vfsProvider;
-
-        eventService.subscribe(new EventSubscriber<FileTrackingOperationEvent>() {
-            @Override
-            public void onEvent(FileTrackingOperationEvent event) {
-                onFileTrackingOperationReceived(event.getEndpointId(), event.getFileTrackingOperation());
-            }
-        });
     }
 
-    private void onFileTrackingOperationReceived(String endpointId, FileTrackingOperationDto operation) {
+    void onFileTrackingOperationReceived(String endpointId, FileTrackingOperationDto operation) {
         Type type = operation.getType();
         String path = operation.getPath();
         String oldPath = operation.getOldPath();

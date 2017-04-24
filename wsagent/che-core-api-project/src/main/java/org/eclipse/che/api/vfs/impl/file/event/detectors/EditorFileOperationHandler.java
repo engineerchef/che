@@ -10,13 +10,13 @@
  *******************************************************************************/
 package org.eclipse.che.api.vfs.impl.file.event.detectors;
 
+import org.eclipse.che.api.core.jsonrpc.JsonRpcException;
 import org.eclipse.che.api.core.jsonrpc.RequestHandlerConfigurator;
 import org.eclipse.che.api.core.notification.EventService;
 import org.eclipse.che.api.project.shared.dto.event.FileTrackingOperationDto;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.util.function.BiConsumer;
 
 /**
  * @author Roman Nikitenko
@@ -26,10 +26,12 @@ public class EditorFileOperationHandler {
     private static final String INCOMING_METHOD = "track:editor-file";
 
     private final EventService eventService;
+    private final EditorFileTracker editorFileTracker;
 
     @Inject
-    public EditorFileOperationHandler(EventService eventService) {
+    public EditorFileOperationHandler(EventService eventService, EditorFileTracker editorFileTracker) {
         this.eventService = eventService;
+        this.editorFileTracker = editorFileTracker;
     }
 
     @Inject
@@ -37,12 +39,17 @@ public class EditorFileOperationHandler {
         configurator.newConfiguration()
                     .methodName(INCOMING_METHOD)
                     .paramsAsDto(FileTrackingOperationDto.class)
-                    .noResult()
-                    .withConsumer(getFileTrackingOperationConsumer());
+                    .resultAsEmpty()
+                    .withFunction(this::handleFileTrackingOperation);
     }
 
-    private BiConsumer<String, FileTrackingOperationDto> getFileTrackingOperationConsumer() {
-        return (String endpointId, FileTrackingOperationDto operation) ->
-                eventService.publish(new FileTrackingOperationEvent(endpointId, operation));
+    private Void handleFileTrackingOperation(String endpointId, FileTrackingOperationDto operation) {
+        try {
+            editorFileTracker.onFileTrackingOperationReceived(endpointId, operation);
+            eventService.publish(new FileTrackingOperationEvent(endpointId, operation));
+            return null;
+        } catch (Exception e) {
+            throw new JsonRpcException(500, e.getLocalizedMessage());
+        }
     }
 }

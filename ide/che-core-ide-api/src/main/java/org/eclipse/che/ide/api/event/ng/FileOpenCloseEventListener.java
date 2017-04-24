@@ -24,8 +24,8 @@ import javax.inject.Singleton;
 import java.util.List;
 import java.util.Objects;
 
-import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingStartEvent;
-import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingStopEvent;
+import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingStartedEvent;
+import static org.eclipse.che.ide.api.event.ng.FileTrackingEvent.newFileTrackingStopedEvent;
 
 /**
  * File open/close event listener aimed to wrap {@link FileEvent} into {@link FileTrackingEvent}
@@ -66,7 +66,7 @@ public class FileOpenCloseEventListener {
             }
 
             private void processFileOpen(Path path) {
-                eventBus.fireEvent(newFileTrackingStartEvent(path.toString()));
+                eventBus.fireEvent(newFileTrackingStartedEvent(path.toString()));
             }
 
             private void processFileClose(EditorPartPresenter closingEditor, List<EditorPartPresenter> openedEditors, Path path) {
@@ -77,7 +77,7 @@ public class FileOpenCloseEventListener {
                     }
                 }
 
-                eventBus.fireEvent(newFileTrackingStopEvent(path.toString()));
+                eventBus.fireEvent(newFileTrackingStopedEvent(path.toString()));
 
             }
         });
